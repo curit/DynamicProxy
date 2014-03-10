@@ -1,9 +1,6 @@
 ﻿namespace DynamicProxy.Tests
 {
     using System;
-    using System.Data.SqlTypes;
-    using System.Diagnostics;
-    using System.Security.Cryptography.X509Certificates;
     using Xunit;
     using XunitShould;
 
@@ -13,6 +10,7 @@
         void ThrowUp();
         void DoNothing();
         int Test(int i);
+        string AlsoATest(int i, double d);
         T Test<T>(T input);
         int I { get; set; }
     }
@@ -45,6 +43,11 @@
             var iInput = Convert.ToInt32(input);
             
             return (T) (object) (iInput + 2);
+        }
+
+        public string AlsoATest(int i, double d)
+        {
+            return (i + d).ToString();
         }
 
         public int I { get; set; }
@@ -213,6 +216,38 @@
             //Then
             FakeItEasy.A.CallTo(() => aFakedCallee.Test(FakeItEasy.A<double>.Ignored)).MustHaveHappened(FakeItEasy.Repeated.Never);
             result.ShouldEqual(8);
+        }
+
+        [Fact]
+        public void ShouldBeAlbeToInterceptAFunctionCallWithMoreParameters()
+        {
+            //Given
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            proxy.AddInterceptor<int, double, string>(
+                callee => callee.AlsoATest(A<int>.PlaceHolder, A<double>.PlaceHolder), (func, i, d) => func(i, d));
+
+            //When
+            var result = proxiedCallee.AlsoATest(4, 4.0);
+
+            //Then
+            result.ShouldEqual("8");
+        }
+
+        [Fact]
+        public void ShouldBeAbleToTransforAFunctionParameter()
+        {
+            //Given
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            proxy.AddTransformer<double>(c => c.AlsoATest(A<int>.Selected, A<double>.PlaceHolder), Direction.In,
+                d => d + 12.4);
+
+            //When
+            var result = proxiedCallee.AlsoATest(4, 4.0);
+
+            //Then
+            result.ShouldEqual("20.4");
         }
     }
 }

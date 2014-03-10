@@ -44,6 +44,7 @@ namespace DynamicProxy
                             <#= args #>
                         }), <#= calleeArgs #>));
 		}
+
 	<#}#>
 
 	<# 
@@ -63,6 +64,7 @@ namespace DynamicProxy
                 return null;
             });
 		}
+
 	<#}#>
 }
 }

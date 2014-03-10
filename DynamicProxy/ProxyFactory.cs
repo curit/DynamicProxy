@@ -8,9 +8,14 @@ namespace DynamicProxy
     using System.Reflection;
     using ImpromptuInterface;
 
-    public class A<T>
+    public static class A<T>
     {
         public static T PlaceHolder
+        {
+            get { return default(T); }
+        }
+
+        public static T Selected
         {
             get { return default(T); }
         }
@@ -38,6 +43,21 @@ namespace DynamicProxy
                     return ((MethodCallExpression)expression).Method;
                 case ExpressionType.MemberAccess:
                     return ((MemberExpression)expression).Member;
+                default:
+                    return null;
+            }
+        }
+
+        internal static MethodCallExpression GetTargetMethodCall(this Expression expression)
+        {
+            switch (expression.NodeType)
+            {
+                case ExpressionType.Convert:
+                    return GetTargetMethodCall(((UnaryExpression)expression).Operand);
+                case ExpressionType.Lambda:
+                    return GetTargetMethodCall(((LambdaExpression)expression).Body);
+                case ExpressionType.Call:
+                    return ((MethodCallExpression)expression);
                 default:
                     return null;
             }
@@ -103,7 +123,7 @@ namespace DynamicProxy
                 outTransformer = _transformers.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs, Direction.Out))
                     ? _transformers[Tuple.Create(binder.Name, hasTypeArgs, Direction.Out)]
                     : new Func<object, object>(x => x);
-
+                
                 interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs))
                     ? _interceptors[Tuple.Create(binder.Name, hasTypeArgs)]
                     : null;
@@ -150,9 +170,26 @@ namespace DynamicProxy
             var hasGenericTypeArguments = (memberInfo.MemberType == MemberTypes.Method) &&
                                           ((MethodInfo) memberInfo).IsGenericMethod;
 
+            if (direction == Direction.In)
+            {
+                if (memberInfo.MemberType == MemberTypes.Property)
+                {
+                    _inTransformers.Add(Tuple.Create(functionOrPropertyName, false, direction), transformer);
+                }
+                else if (memberInfo.MemberType == MemberTypes.Method)
+                {
+                    var methodCall = functionOrProperty.GetTargetMethodCall();
+                    var arg = methodCall.Arguments.FirstOrDefault(a => a is MemberExpression && ((MemberExpression)a).Member.Name == "Selected");
+                    throw new NotImplementedException();
+
+                }
+            }
+
             _transformers.Add(Tuple.Create(functionOrPropertyName, hasGenericTypeArguments, direction), transformer);
             return this;
         }
+
+        private Dictionary<Tuple<string, bool, Direction>, Delegate> _inTransformers { get; set; }
 
         public IProxy<T> AddTransformer<T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T2, T2> transformer)
         {
