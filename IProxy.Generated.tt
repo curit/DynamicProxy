@@ -1,0 +1,68 @@
+﻿<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
+<#  const int maxParametersCount = 15; #>
+
+namespace DynamicProxy
+{
+	using System;
+	using System.Dynamic;
+	using System.Linq.Expressions;
+
+	public partial interface IProxy<T>
+	{
+	<# 
+	for(int parametersCount = 1; parametersCount <= maxParametersCount; parametersCount++) { 
+	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));#>
+	IProxy<T> AddInterceptor<<#= parameters #>, TResult>(Expression<Action<T>> functionOrProperty, Func<Func<<#= parameters #>, TResult>, <#= parameters #>, TResult> func);
+	<#}#>
+
+	<# 
+	for(int parametersCount = 1; parametersCount <= maxParametersCount; parametersCount++) { 
+	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));#>
+	IProxy<T> AddInterceptor<<#= parameters #>>(Expression<Action<T>> functionOrProperty, Action<Action<<#= parameters #>>, <#= parameters #>> func);
+	<#}#>
+}
+
+	public partial class ProxyFactory<T> : DynamicObject, IProxy<T>
+	{
+	<# 
+	for(int parametersCount = 1; parametersCount <= maxParametersCount; parametersCount++) { 
+	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));
+	   string args = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "arg" + i));
+	   string calleeArgs = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "(T" + i +")args[" + (i - 1) + "]"));#>
+	public IProxy<T> AddInterceptor<<#= parameters #>, TResult>(Expression<Action<T>> functionOrProperty, Func<Func<<#= parameters #>, TResult>, <#= parameters #>, TResult> func)
+		{
+			return AddInterceptor(functionOrProperty,
+                (del, args) =>
+                    func((<#= args #>)
+                        => (TResult) del(new object[]
+                        {
+                            <#= args #>
+                        }), <#= calleeArgs #>));
+		}
+	<#}#>
+
+	<# 
+	for(int parametersCount = 1; parametersCount <= maxParametersCount; parametersCount++) { 
+	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));
+	   string args = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "arg" + i));
+	   string calleeArgs = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "(T" + i +")args[" + (i - 1) + "]"));#>
+	public IProxy<T> AddInterceptor<<#= parameters #>>(Expression<Action<T>> functionOrProperty, Action<Action<<#= parameters #>>, <#= parameters #>> action)
+		{
+			return AddInterceptor(functionOrProperty, (del, args) =>
+            {
+                action(
+                    (<#= args #>) =>
+                        del(new object[]
+                        {<#= args #>}),
+                    <#= calleeArgs #>);
+                return null;
+            });
+		}
+	<#}#>
+}
+}
