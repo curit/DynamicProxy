@@ -7,15 +7,76 @@
 
     public partial interface IProxy<T>
     {
-        IProxy<T> AddTransformer<T1, T2>(Expression functionOrProperty, Direction direction, Func<T1, T2> transformer);
-        IProxy<T> AddTransformer<T1>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T1, T1> transformer);
-        IProxy<T> AddTransformer<T1, T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T1, T2> transformer);
-        IProxy<T> AddInterceptor(Expression<Action<T>> functionOrProperty, Action<Action> action);
-        IProxy<T> AddInterceptor(Expression functionOrProperty, Func<Func<object[], object>, object[], object> func);
+        /// <summary>
+        /// Main fucntionOrProperty for adding transformers.
+        /// </summary>
+        /// <typeparam name="T1">Input Type</typeparam>
+        /// <typeparam name="TResult">Result Type</typeparam>
+        /// <param name="fucntionOrProperty">An expression pointing to the fucntion or a function or parameter</param>
+        /// <param name="direction">Whether you want to transform the input or the output <see cref="Direction"/></param>
+        /// <param name="transformer">The delegate containing the tranformer.</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddTransformer<T1, TResult>(Expression fucntionOrProperty, Direction direction, Func<T1, TResult> transformer);
 
-        //for properties
-        IProxy<T> AddTransformer<T1, T2>(Expression<Func<T, T1>> functionOrProperty, Direction direction, Func<T1, T2> transformer);
-        IProxy<T> AddInterceptor<TResult>(Expression<Func<T, TResult>> functionOrProperty, Func<Func<TResult>, TResult> func);
-        IProxy<T> AddInterceptor<T1, TResult>(Expression<Func<T, TResult>> functionOrProperty, Action<Action<T1>, T1> func);
+        /// <summary>
+        /// Conveniance function for adding a transformer with the same input as output to a function.
+        /// </summary>
+        /// <typeparam name="T1">The in and output type.</typeparam>
+        /// <param name="function">An expression pointing to a function.</param>
+        /// <param name="direction">Whether you want to transform the result or a parameter.</param>
+        /// <param name="transformer">The delegate containing the transformer.</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddTransformer<T1>(Expression<Action<T>> function, Direction direction, Func<T1, T1> transformer);
+
+        /// <summary>
+        /// Function to add a transformer to a function.
+        /// </summary>
+        /// <typeparam name="T1">The in and output type.</typeparam>
+        /// <typeparam name="TResult">The resulting type</typeparam>
+        /// <param name="function">An expression pointing to a function.</param>
+        /// <param name="direction">Whether you want to transform the result or a parameter.</param>
+        /// <param name="transformer">The delegate containing the transformer.</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddTransformer<T1, TResult>(Expression<Action<T>> function, Direction direction, Func<T1, TResult> transformer);
+
+        /// <summary>
+        /// Function to add a transformer to a function
+        /// </summary>
+        /// <typeparam name="T1">The in and output type.</typeparam>
+        /// <typeparam name="TResult">The resulting type.</typeparam>
+        /// <param name="property">An expression pointing to a function.</param>
+        /// <param name="direction">Whether you want to transform the result or a parameter.</param>
+        /// <param name="transformer">The delegate containing the transformer.</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddTransformer<T1, TResult>(Expression<Func<T, T1>> property, Direction direction, Func<T1, TResult> transformer);
+        
+        /// <summary>
+        /// Add interceptor to void function without parameters;
+        /// </summary>
+        /// <param name="function">An expression pointing to a function</param>
+        /// <param name="interceptor">The delegate containing the interceptor.</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddInterceptor(Expression<Action<T>> function, Action<Action> interceptor);
+
+        /// <summary>
+        /// Add Interceptor to PropertyGet
+        /// </summary>
+        /// <typeparam name="TProp">Type of the function</typeparam>
+        /// <param name="property">Expression pointing to the function</param>
+        /// <param name="interceptor">The Interceptor delegate</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Func<Func<TProp>, TProp> interceptor);
+
+        /// <summary>
+        /// Add Interceptor to PropertySet
+        /// </summary>
+        /// <typeparam name="TProp">Type of the function</typeparam>
+        /// <param name="property">Expression pointing to the function</param>
+        /// <param name="interceptor">The Interceptor delegate</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Action<Action<TProp>, TProp> interceptor);
+
+        //IProxy<T> AddFunctionInterceptor(Expression<Action<T>> function, Func<Func<object[], object>, object[], object> func);
+        //IProxy<T> AddPropertyInterceptor(Expression property, Func<Func<object[], object>, object[], object> func, Direction direction);
     }
 }

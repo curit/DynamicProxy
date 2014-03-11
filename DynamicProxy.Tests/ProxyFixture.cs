@@ -134,7 +134,8 @@
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
 
-            proxy.AddTransformer<double>(c => c.Test(A<double>.PlaceHolder), Direction.Out, a => a + 2).AddTransformer<int>(c => c.Test(A<int>.PlaceHolder), Direction.Out, i => i + 1);
+            proxy.AddTransformer<double>(c => c.Test(A<double>.PlaceHolder), Direction.Out, a => a + 2)
+                 .AddTransformer<int>(c => c.Test(A<int>.PlaceHolder), Direction.Out, i => i + 1);
             
             //When
             var d = proxiedCallee.Test(5.0);
@@ -298,7 +299,7 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddInterceptor<int, int>(c => c.I, (func, i) => func(i + 2));
+            proxy.AddInterceptor(c => c.I, (func, i) => func(i + 2));
             
             //When
             proxiedCallee.I = 5;
