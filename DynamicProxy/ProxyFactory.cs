@@ -8,16 +8,12 @@ namespace DynamicProxy
     using System.Reflection;
     using ImpromptuInterface;
 
-    public static class A<T>
-    {
-        public static T PlaceHolder
-        {
-            get { return default(T); }
-        }
 
-        public static T Selected
+    internal static class BinderExtensions
+    {
+        public static IList<Type> GetTypeArguments(this InvokeMemberBinder binder)
         {
-            get { return default(T); }
+            return Impromptu.InvokeGet(binder, "Microsoft.CSharp.RuntimeBinder.ICSharpInvokeOrInvokeMemberBinder.TypeArguments") as IList<Type>;
         }
     }
 
@@ -68,9 +64,11 @@ namespace DynamicProxy
     {
         private readonly T _wrappedObject;
         private readonly Type _wrappedObjectType;
+        
+        private readonly Func<object, object> _identify = x => x; 
+
         private readonly Dictionary<string, PropertyInfo> _properties;
         private readonly Dictionary<Tuple<string, bool, int>, MethodInfo> _publicMethods;
-        
         private readonly Dictionary<Tuple<string, bool>, Delegate> _interceptors = new Dictionary<Tuple<string, bool>, Delegate>();
         private readonly Dictionary<Tuple<string, bool>, Delegate> _outTransformers = new Dictionary<Tuple<string, bool>, Delegate>();
         private readonly Dictionary<string, Tuple<int, Delegate>> _inTransformers = new Dictionary<string, Tuple<int, Delegate>>();
@@ -83,7 +81,6 @@ namespace DynamicProxy
             return new ProxyFactory<T>(obj).ActLike<T1>(typeof(IProxy<T>));
         }
 
-        //you can make the contructor private so you are forced to use the Proxy method.
         private ProxyFactory(T obj)
         {
             _wrappedObject = obj;
@@ -91,7 +88,7 @@ namespace DynamicProxy
             _properties = _wrappedObjectType.GetProperties().ToDictionary(p => p.Name, p => p);
             _publicMethods =
                 _wrappedObjectType.GetMethods()
-                    .Where(m => !m.IsSpecialName) //exclude property functions
+                    .Where(m => !m.IsSpecialName) //exclude property functions, more maybe needed here.
                     .Where(m => m.IsPublic)
                     .Where(m => m.DeclaringType == _wrappedObjectType)
                     .ToDictionary(m => Tuple.Create(m.Name, m.IsGenericMethod, m.GetParameters().Length), p => p);
@@ -101,7 +98,7 @@ namespace DynamicProxy
         {
             var outTransformer = _outTransformers.ContainsKey(Tuple.Create(binder.Name, false))
                 ? _outTransformers[Tuple.Create(binder.Name, false)]
-                : new Func<object, object>(x => x);
+                : _identify;
 
             var interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, false))
                 ? _interceptors[Tuple.Create(binder.Name, false)]
@@ -113,10 +110,8 @@ namespace DynamicProxy
 
             if (interceptor != null)
             {
-                Func<object, object[], object> meth = property.GetValue;
-                Func<object, Func<object[], object>> curry = Impromptu.Curry(meth);
-                Func<object[], object> curriedMethod = curry(_wrappedObject);
-                partialResult = interceptor.FastDynamicInvoke(new object[] { curriedMethod });
+                Func<object, object> meth = property.GetValue;
+                partialResult = interceptor.FastDynamicInvoke(new object[] { meth, new object [] {} });
             }
             else
             {
@@ -127,26 +122,20 @@ namespace DynamicProxy
             return true;
         }
 
-
         public override bool TrySetMember(SetMemberBinder binder, object value)
         {
-            var inTransformer = _inTransformers.ContainsKey(binder.Name)
-                ? _inTransformers[binder.Name].Item2
-                : new Func<object, object>(x => x);
-
-            var interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, false))
-               ? _interceptors[Tuple.Create(binder.Name, false)]
-               : null;
-
+            var selectorTuple = Tuple.Create(binder.Name, false);
             var property = _properties[binder.Name];
-
+            
+            var inTransformer = _inTransformers.ContainsKey(binder.Name) ? _inTransformers[binder.Name].Item2 : _identify;
+            var interceptor = _interceptors.ContainsKey(selectorTuple) ? _interceptors[selectorTuple] : null;
             var transformedValue = inTransformer.FastDynamicInvoke(value);
 
             if (interceptor != null)
             {
                 Action<object, object> meth = property.SetValue;
                 Func<object, Action<object>> curry = Impromptu.Curry(meth);
-                Action<object> curriedMethod = curry(_wrappedObject);
+                var curriedMethod = curry(_wrappedObject);
                 interceptor.FastDynamicInvoke(new [] { curriedMethod, transformedValue });
             }
             else
@@ -156,8 +145,7 @@ namespace DynamicProxy
 
             return true;
         }
-
-
+        
         public override bool TryInvokeMember(InvokeMemberBinder binder, object[] args, out object result)
         {
             Delegate outTransformer;
@@ -166,17 +154,14 @@ namespace DynamicProxy
             Tuple<int, Delegate> inTransformer;
             try
             {
-                var typeArgs = Impromptu.InvokeGet(binder, "Microsoft.CSharp.RuntimeBinder.ICSharpInvokeOrInvokeMemberBinder.TypeArguments") as IList<Type>;
+                var typeArgs = binder.GetTypeArguments();
                 var hasTypeArgs = typeArgs != null && typeArgs.Count > 0;
-                method = _publicMethods[Tuple.Create(binder.Name, hasTypeArgs, args.Length)];
-                outTransformer = _outTransformers.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs))
-                    ? _outTransformers[Tuple.Create(binder.Name, hasTypeArgs)]
-                    : new Func<object, object>(x => x);
-                
-                interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs))
-                    ? _interceptors[Tuple.Create(binder.Name, hasTypeArgs)]
-                    : null;
+                var methodSelectorTuple = Tuple.Create(binder.Name, hasTypeArgs, args.Length);
+                var selectorTuple = Tuple.Create(binder.Name, hasTypeArgs);
 
+                method = _publicMethods[methodSelectorTuple];
+                outTransformer = _outTransformers.ContainsKey(selectorTuple) ? _outTransformers[selectorTuple] : _identify;
+                interceptor = _interceptors.ContainsKey(selectorTuple) ? _interceptors[selectorTuple] : null;
                 inTransformer = _inTransformers.ContainsKey(binder.Name) ? _inTransformers[binder.Name] : null;
                 
                 if (hasTypeArgs)
@@ -201,7 +186,7 @@ namespace DynamicProxy
                 {
                     Func<object, object[], object> meth = method.Invoke;
                     Func<object, Func<object[], object>> curry = Impromptu.Curry(meth);
-                    Func<object[], object> curriedMethod = curry(_wrappedObject);
+                    var curriedMethod = curry(_wrappedObject);
                     partialResult = interceptor.FastDynamicInvoke(new object[] {curriedMethod, args});
                 }
                 else
@@ -227,17 +212,18 @@ namespace DynamicProxy
 
             if (direction == Direction.In)
             {
-                if (memberInfo.MemberType == MemberTypes.Property)
+                switch (memberInfo.MemberType)
                 {
-                    _inTransformers.Add(functionOrPropertyName, Tuple.Create(0, (Delegate)transformer));
-                }
-                else if (memberInfo.MemberType == MemberTypes.Method)
-                {
-                    var methodCall = functionOrProperty.GetTargetMethodCall();
-                    var arg =
-                        methodCall.Arguments.Select((a, i) => new Tuple<int, MemberExpression>(i, (MemberExpression) a))
-                            .First(t => t.Item2.Member.Name == "Selected");
-                    _inTransformers.Add(functionOrPropertyName, Tuple.Create(arg.Item1, (Delegate)transformer));
+                    case MemberTypes.Property:
+                        _inTransformers.Add(functionOrPropertyName, Tuple.Create(0, (Delegate)transformer));
+                        break;
+                    case MemberTypes.Method:
+                    {
+                        var methodCall = functionOrProperty.GetTargetMethodCall();
+                        var arg = methodCall.Arguments.Select((a, i) => Tuple.Create(i, (MemberExpression) a)).First(t => t.Item2.Member.Name == "Selected");
+                        _inTransformers.Add(functionOrPropertyName, Tuple.Create(arg.Item1, (Delegate)transformer));
+                    }
+                    break;
                 }
             }
             else
@@ -257,6 +243,16 @@ namespace DynamicProxy
             return AddTransformer((Expression) functionOrProperty, direction, transformer);
         }
 
+        public IProxy<T> AddInterceptor<TResult>(Expression<Func<T, TResult>> functionOrProperty, Func<Func<TResult>, TResult> func)
+        {
+            return AddInterceptor(functionOrProperty, (del, args) => func(() => (TResult)del.FastDynamicInvoke()));
+        }
+
+        public IProxy<T> AddInterceptor<T1, TResult>(Expression<Func<T, TResult>> functionOrProperty, Func<Func<T1, TResult>, T1, TResult> func)
+        {
+            return AddInterceptor(functionOrProperty, (del, args) => func(a => (TResult)del.FastDynamicInvoke(new object [] {a}), (T1) args[0]));
+        }
+
         public IProxy<T> AddTransformer<T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T2, T2> transformer)
         {
             return AddTransformer<T2, T2>(functionOrProperty, direction, transformer);
@@ -264,20 +260,16 @@ namespace DynamicProxy
 
         public IProxy<T> AddInterceptor(Expression<Action<T>> functionOrProperty, Action<Action> action)
         {
-            return AddInterceptor(functionOrProperty, (del, args) =>
-            {
-                action(() => del(args));
-                return null;
-            });
+            return AddInterceptor(functionOrProperty, (del, args) =>  { action(() => del(args)); return null; });
         }
 
-        public IProxy<T> AddInterceptor(Expression<Action<T>> functionOrProperty, Func<Func<object[], object>, object[], object> func)
+        public IProxy<T> AddInterceptor(Expression functionOrProperty, Func<Func<object[], object>, object[], object> func)
         {
             var memberInfo = functionOrProperty.GetTargetMemberInfo();
             var functionOrPropertyName = memberInfo.Name;
             var hasGenericTypeArguments = (memberInfo.MemberType == MemberTypes.Method) &&
                                           ((MethodInfo)memberInfo).IsGenericMethod;
-
+            
             _interceptors.Add(Tuple.Create(functionOrPropertyName, hasGenericTypeArguments), new Func<Delegate, object[], object> ((del, args) => func(arg => del.FastDynamicInvoke(new object[] { arg }), args)));
             return this;
         }

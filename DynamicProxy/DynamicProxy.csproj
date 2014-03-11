@@ -47,6 +47,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="A.cs" />
     <Compile Include="IProxy.cs" />
     <Compile Include="IProxy.Generated.cs">
       <AutoGen>True</AutoGen>
