@@ -59,7 +59,7 @@ namespace DynamicProxy
                 (del, args) =>
                     func((arg1, arg2)
                         => (TResult) del(new object[]
-                        {
+                        { 
                             arg1, arg2
                         }), (T1)args[0], (T2)args[1]));
 		}

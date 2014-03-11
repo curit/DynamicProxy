@@ -279,7 +279,7 @@
         }
 
         [Fact]
-        public void ShouldBeAbleToInterceptAProperty()
+        public void ShouldBeAbleToInterceptAPropertyGetter()
         {
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
@@ -291,5 +291,21 @@
             //Then
             proxiedCallee.I.ShouldEqual(7);
         }
+
+        [Fact]
+        public void ShouldBeAbleToInterceptAPropertySetter()
+        {
+            //Given
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            proxy.AddInterceptor<int, int>(c => c.I, (func, i) => func(i + 2));
+            
+            //When
+            proxiedCallee.I = 5;
+            
+            //Then
+            proxiedCallee.I.ShouldEqual(7);
+        }
+
     }
 }

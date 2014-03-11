@@ -135,8 +135,12 @@ namespace DynamicProxy
             {
                 Action<object, object> meth = property.SetValue;
                 Func<object, Action<object>> curry = Impromptu.Curry(meth);
-                var curriedMethod = curry(_wrappedObject);
-                interceptor.FastDynamicInvoke(new [] { curriedMethod, transformedValue });
+                Func<object[], object> curriedMethod = args =>
+                {
+                    curry(_wrappedObject)(args[0]);
+                    return null;;
+                };
+                interceptor.FastDynamicInvoke(new object [] { curriedMethod, new [] { transformedValue } });
             }
             else
             {
@@ -233,36 +237,88 @@ namespace DynamicProxy
             return this;
         }
 
+        /// <summary>
+        /// Add transformer to fumction
+        /// </summary>
+        /// <typeparam name="T1"></typeparam>
+        /// <typeparam name="T2"></typeparam>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="direction"></param>
+        /// <param name="transformer"></param>
+        /// <returns></returns>
         public IProxy<T> AddTransformer<T1, T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T1, T2> transformer)
         {
             return AddTransformer((Expression) functionOrProperty, direction, transformer);
         }
 
+        /// <summary>
+        /// Add transformer to property
+        /// </summary>
+        /// <typeparam name="T1"></typeparam>
+        /// <typeparam name="T2"></typeparam>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="direction"></param>
+        /// <param name="transformer"></param>
+        /// <returns></returns>
         public IProxy<T> AddTransformer<T1, T2>(Expression<Func<T, T1>> functionOrProperty, Direction direction, Func<T1, T2> transformer)
         {
             return AddTransformer((Expression) functionOrProperty, direction, transformer);
         }
 
+        /// <summary>
+        /// Conveniance method for adding transformers with same in and output.
+        /// </summary>
+        /// <typeparam name="T2"></typeparam>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="direction"></param>
+        /// <param name="transformer"></param>
+        /// <returns></returns>
+        public IProxy<T> AddTransformer<T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T2, T2> transformer)
+        {
+            return AddTransformer<T2, T2>(functionOrProperty, direction, transformer);
+        }
+        
+        /// <summary>
+        /// Add Interceptor to PropertyGet
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="func"></param>
+        /// <returns></returns>
         public IProxy<T> AddInterceptor<TResult>(Expression<Func<T, TResult>> functionOrProperty, Func<Func<TResult>, TResult> func)
         {
             return AddInterceptor(functionOrProperty, (del, args) => func(() => (TResult)del.FastDynamicInvoke()));
         }
 
-        public IProxy<T> AddInterceptor<T1, TResult>(Expression<Func<T, TResult>> functionOrProperty, Func<Func<T1, TResult>, T1, TResult> func)
+        /// <summary>
+        /// Add Interceptor to PropertySet
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="func"></param>
+        /// <returns></returns>
+        public IProxy<T> AddInterceptor<T1, TResult>(Expression<Func<T, TResult>> functionOrProperty, Action<Action<T1>, T1> func)
         {
-            return AddInterceptor(functionOrProperty, (del, args) => func(a => (TResult)del.FastDynamicInvoke(new object [] {a}), (T1) args[0]));
+            return AddInterceptor(functionOrProperty, (del, args) => { func(a => del(new object[] {a}), (T1) args[0]); return null; });
         }
-
-        public IProxy<T> AddTransformer<T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T2, T2> transformer)
-        {
-            return AddTransformer<T2, T2>(functionOrProperty, direction, transformer);
-        }
-
+        
+        /// <summary>
+        /// Add interceptor to void function without parameters.
+        /// </summary>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="action"></param>
+        /// <returns></returns>
         public IProxy<T> AddInterceptor(Expression<Action<T>> functionOrProperty, Action<Action> action)
         {
             return AddInterceptor(functionOrProperty, (del, args) =>  { action(() => del(args)); return null; });
         }
 
+        /// <summary>
+        /// Mother of all Interceptor add functions. Actually does the adding.
+        /// </summary>
+        /// <param name="functionOrProperty"></param>
+        /// <param name="func"></param>
+        /// <returns></returns>
         public IProxy<T> AddInterceptor(Expression functionOrProperty, Func<Func<object[], object>, object[], object> func)
         {
             var memberInfo = functionOrProperty.GetTargetMemberInfo();
