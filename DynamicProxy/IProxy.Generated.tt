@@ -27,7 +27,7 @@ namespace DynamicProxy
 	<#}#>
 }
 
-	public partial class ProxyFactory<T> : DynamicObject, IProxy<T>
+	public partial class ProxyFactory<T>
 	{
 	<# 
 	for(int parametersCount = 1; parametersCount <= maxParametersCount; parametersCount++) { 

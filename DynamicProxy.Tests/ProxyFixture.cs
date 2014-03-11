@@ -224,8 +224,7 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddInterceptor<int, double, string>(
-                callee => callee.AlsoATest(A<int>.PlaceHolder, A<double>.PlaceHolder), (func, i, d) => func(i, d));
+            proxy.AddInterceptor<int, double, string>(c => c.AlsoATest(A<int>.PlaceHolder, A<double>.PlaceHolder), (func, i, arg3) => func(i, arg3));
 
             //When
             var result = proxiedCallee.AlsoATest(4, 4.0);
@@ -240,14 +239,43 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddTransformer<double>(c => c.AlsoATest(A<int>.Selected, A<double>.PlaceHolder), Direction.In,
-                d => d + 12.4);
+            proxy.AddTransformer<double>(c => c.AlsoATest(A<int>.PlaceHolder, A<double>.Selected), Direction.In, d => d + 12.4);
 
             //When
             var result = proxiedCallee.AlsoATest(4, 4.0);
 
             //Then
             result.ShouldEqual("20.4");
+        }
+
+        [Fact]
+        public void ShouldBeAbleToTransformTheInputOfAProperty()
+        {
+            //Given
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            proxy.AddTransformer(c => c.I, Direction.In, d => (int)(d + 12.4));
+
+            //When
+            proxiedCallee.I = 8;
+
+            //Then
+            proxiedCallee.I.ShouldEqual(20);
+        }
+
+        [Fact]
+        public void ShouldBeAbleToTransformTheOutputOfAProperty()
+        {
+            //Given
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            proxy.AddTransformer(c => c.I, Direction.Out, d => (int)(d + 12.4));
+
+            //When
+            proxiedCallee.I = 8;
+
+            //Then
+            proxiedCallee.I.ShouldEqual(20);
         }
     }
 }

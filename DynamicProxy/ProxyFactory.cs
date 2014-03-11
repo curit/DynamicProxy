@@ -72,7 +72,8 @@ namespace DynamicProxy
         private readonly Dictionary<Tuple<string, bool, int>, MethodInfo> _publicMethods;
         
         private readonly Dictionary<Tuple<string, bool>, Delegate> _interceptors = new Dictionary<Tuple<string, bool>, Delegate>();
-        private readonly Dictionary<Tuple<string, bool, Direction>, Delegate> _transformers = new Dictionary<Tuple<string, bool, Direction>, Delegate>();
+        private readonly Dictionary<Tuple<string, bool>, Delegate> _outTransformers = new Dictionary<Tuple<string, bool>, Delegate>();
+        private readonly Dictionary<string, Tuple<int, Delegate>> _inTransformers = new Dictionary<string, Tuple<int, Delegate>>();
 
         public static T1 Proxy<T1>(T obj) where T1 : class
         {
@@ -98,14 +99,61 @@ namespace DynamicProxy
 
         public override bool TryGetMember(GetMemberBinder binder, out object result)
         {
-            result = _properties[binder.Name].GetValue(_wrappedObject);
+            var outTransformer = _outTransformers.ContainsKey(Tuple.Create(binder.Name, false))
+                ? _outTransformers[Tuple.Create(binder.Name, false)]
+                : new Func<object, object>(x => x);
+
+            var interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, false))
+                ? _interceptors[Tuple.Create(binder.Name, false)]
+                : null;
+
+            var property = _properties[binder.Name];
+
+            object partialResult;
+
+            if (interceptor != null)
+            {
+                Func<object, object[], object> meth = property.GetValue;
+                Func<object, Func<object[], object>> curry = Impromptu.Curry(meth);
+                Func<object[], object> curriedMethod = curry(_wrappedObject);
+                partialResult = interceptor.FastDynamicInvoke(new object[] { curriedMethod });
+            }
+            else
+            {
+                partialResult = property.GetValue(_wrappedObject);
+            }
+
+            result = outTransformer.FastDynamicInvoke(partialResult);
             return true;
         }
 
 
         public override bool TrySetMember(SetMemberBinder binder, object value)
         {
-            _properties[binder.Name].SetValue(_wrappedObject, value);
+            var inTransformer = _inTransformers.ContainsKey(binder.Name)
+                ? _inTransformers[binder.Name].Item2
+                : new Func<object, object>(x => x);
+
+            var interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, false))
+               ? _interceptors[Tuple.Create(binder.Name, false)]
+               : null;
+
+            var property = _properties[binder.Name];
+
+            var transformedValue = inTransformer.FastDynamicInvoke(value);
+
+            if (interceptor != null)
+            {
+                Action<object, object> meth = property.SetValue;
+                Func<object, Action<object>> curry = Impromptu.Curry(meth);
+                Action<object> curriedMethod = curry(_wrappedObject);
+                interceptor.FastDynamicInvoke(new [] { curriedMethod, transformedValue });
+            }
+            else
+            {
+                property.SetValue(_wrappedObject, transformedValue);
+            }
+
             return true;
         }
 
@@ -115,19 +163,22 @@ namespace DynamicProxy
             Delegate outTransformer;
             MethodInfo method;
             Delegate interceptor;
+            Tuple<int, Delegate> inTransformer;
             try
             {
                 var typeArgs = Impromptu.InvokeGet(binder, "Microsoft.CSharp.RuntimeBinder.ICSharpInvokeOrInvokeMemberBinder.TypeArguments") as IList<Type>;
                 var hasTypeArgs = typeArgs != null && typeArgs.Count > 0;
                 method = _publicMethods[Tuple.Create(binder.Name, hasTypeArgs, args.Length)];
-                outTransformer = _transformers.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs, Direction.Out))
-                    ? _transformers[Tuple.Create(binder.Name, hasTypeArgs, Direction.Out)]
+                outTransformer = _outTransformers.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs))
+                    ? _outTransformers[Tuple.Create(binder.Name, hasTypeArgs)]
                     : new Func<object, object>(x => x);
                 
                 interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, hasTypeArgs))
                     ? _interceptors[Tuple.Create(binder.Name, hasTypeArgs)]
                     : null;
 
+                inTransformer = _inTransformers.ContainsKey(binder.Name) ? _inTransformers[binder.Name] : null;
+                
                 if (hasTypeArgs)
                 {
                     method = method.MakeGenericMethod(typeArgs.ToArray());
@@ -140,6 +191,11 @@ namespace DynamicProxy
             }
             try
             {
+                if (inTransformer != null)
+                {
+                    args[inTransformer.Item1] = inTransformer.Item2.FastDynamicInvoke(args[inTransformer.Item1]);
+                }
+
                 object partialResult;
                 if (interceptor != null)
                 {
@@ -162,8 +218,7 @@ namespace DynamicProxy
             return true;
         }
 
-        public IProxy<T> AddTransformer<T2, T3>(Expression<Action<T>> functionOrProperty, Direction direction,
-            Func<T2, T3> transformer)
+        public IProxy<T> AddTransformer<T2, T3>(Expression functionOrProperty, Direction direction, Func<T2, T3> transformer)
         {
             var memberInfo = functionOrProperty.GetTargetMemberInfo();
             var functionOrPropertyName = memberInfo.Name;
@@ -174,22 +229,33 @@ namespace DynamicProxy
             {
                 if (memberInfo.MemberType == MemberTypes.Property)
                 {
-                    _inTransformers.Add(Tuple.Create(functionOrPropertyName, false, direction), transformer);
+                    _inTransformers.Add(functionOrPropertyName, Tuple.Create(0, (Delegate)transformer));
                 }
                 else if (memberInfo.MemberType == MemberTypes.Method)
                 {
                     var methodCall = functionOrProperty.GetTargetMethodCall();
-                    var arg = methodCall.Arguments.FirstOrDefault(a => a is MemberExpression && ((MemberExpression)a).Member.Name == "Selected");
-                    throw new NotImplementedException();
-
+                    var arg =
+                        methodCall.Arguments.Select((a, i) => new Tuple<int, MemberExpression>(i, (MemberExpression) a))
+                            .First(t => t.Item2.Member.Name == "Selected");
+                    _inTransformers.Add(functionOrPropertyName, Tuple.Create(arg.Item1, (Delegate)transformer));
                 }
             }
-
-            _transformers.Add(Tuple.Create(functionOrPropertyName, hasGenericTypeArguments, direction), transformer);
+            else
+            {
+                _outTransformers.Add(Tuple.Create(functionOrPropertyName, hasGenericTypeArguments), transformer);
+            }
             return this;
         }
 
-        private Dictionary<Tuple<string, bool, Direction>, Delegate> _inTransformers { get; set; }
+        public IProxy<T> AddTransformer<T1, T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T1, T2> transformer)
+        {
+            return AddTransformer((Expression) functionOrProperty, direction, transformer);
+        }
+
+        public IProxy<T> AddTransformer<T1, T2>(Expression<Func<T, T1>> functionOrProperty, Direction direction, Func<T1, T2> transformer)
+        {
+            return AddTransformer((Expression) functionOrProperty, direction, transformer);
+        }
 
         public IProxy<T> AddTransformer<T2>(Expression<Action<T>> functionOrProperty, Direction direction, Func<T2, T2> transformer)
         {
@@ -200,7 +266,7 @@ namespace DynamicProxy
         {
             return AddInterceptor(functionOrProperty, (del, args) =>
             {
-                action(() => del(new object[] {}));
+                action(() => del(args));
                 return null;
             });
         }
