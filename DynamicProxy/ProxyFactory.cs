@@ -65,7 +65,7 @@ namespace DynamicProxy
         private readonly T _wrappedObject;
         private readonly Type _wrappedObjectType;
         
-        private readonly Func<object, object> _identify = x => x; 
+        private readonly Func<object, object> _identity = x => x; 
 
         private readonly Dictionary<string, PropertyInfo> _properties;
         private readonly Dictionary<Tuple<string, bool, int>, MethodInfo> _publicMethods;
@@ -98,7 +98,7 @@ namespace DynamicProxy
         {
             var outTransformer = _outTransformers.ContainsKey(Tuple.Create(binder.Name, false))
                 ? _outTransformers[Tuple.Create(binder.Name, false)]
-                : _identify;
+                : _identity;
 
             var interceptor = _interceptors.ContainsKey(Tuple.Create(binder.Name, false))
                 ? _interceptors[Tuple.Create(binder.Name, false)]
@@ -127,7 +127,7 @@ namespace DynamicProxy
             var selectorTuple = Tuple.Create(binder.Name, false);
             var property = _properties[binder.Name];
             
-            var inTransformer = _inTransformers.ContainsKey(binder.Name) ? _inTransformers[binder.Name].Item2 : _identify;
+            var inTransformer = _inTransformers.ContainsKey(binder.Name) ? _inTransformers[binder.Name].Item2 : _identity;
             var interceptor = _interceptors.ContainsKey(selectorTuple) ? _interceptors[selectorTuple] : null;
             var transformedValue = inTransformer.FastDynamicInvoke(value);
 
@@ -160,7 +160,7 @@ namespace DynamicProxy
                 var selectorTuple = Tuple.Create(binder.Name, hasTypeArgs);
 
                 method = _publicMethods[methodSelectorTuple];
-                outTransformer = _outTransformers.ContainsKey(selectorTuple) ? _outTransformers[selectorTuple] : _identify;
+                outTransformer = _outTransformers.ContainsKey(selectorTuple) ? _outTransformers[selectorTuple] : _identity;
                 interceptor = _interceptors.ContainsKey(selectorTuple) ? _interceptors[selectorTuple] : null;
                 inTransformer = _inTransformers.ContainsKey(binder.Name) ? _inTransformers[binder.Name] : null;
                 
