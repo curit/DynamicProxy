@@ -118,7 +118,7 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddTransformer<int, string>(c => c.Banaan(A<int>.PlaceHolder), Direction.Out, i => i.ToString());
+            proxy.AddTransformer(c => c.Banaan(A<int>.PlaceHolder), Direction.Out, i => i.ToString());
 
             //When
             var d = proxiedCallee.Banaan(5);
@@ -194,7 +194,7 @@
             var proxy = proxiedCallee as IProxy<Callee>;
 
             //When
-            proxy.AddInterceptor<int, int>(callee => callee.Test(A<int>.PlaceHolder), (f, arg) => arg + 3);
+            proxy.AddInterceptor<int, int>((callee, i) => callee.Test(i), (f, arg) => arg + 3);
             var result = proxiedCallee.Test(5);
             
             //Then
@@ -211,7 +211,7 @@
             var proxy = proxiedCallee as IProxy<Callee>;
 
             //When
-            proxy.AddInterceptor<double, int>(callee => callee.Test(A<double>.PlaceHolder), (f, arg) => (int)arg + 3);
+            proxy.AddInterceptor<double, int>((callee, d) => callee.Test(d), (f, arg) => (int)arg + 3);
             var result = proxiedCallee.Test(5.0);
 
             //Then
@@ -225,7 +225,7 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddInterceptor<int, double, string>(c => c.AlsoATest(A<int>.PlaceHolder, A<double>.PlaceHolder), (func, i, arg3) => func(i, arg3));
+            proxy.AddInterceptor<int, double, string>((callee, i, arg3) => callee.AlsoATest(i, arg3), (func, i, arg3) => func(i, arg3));
 
             //When
             var result = proxiedCallee.AlsoATest(4, 4.0);
@@ -248,6 +248,39 @@
             //Then
             result.ShouldEqual("20.4");
         }
+
+
+        [Fact]
+        public void ShouldThrowAnExceptionWhenAnInvalidTransformerIsAdded()
+        {
+            //Given, When
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            
+            //Then
+            new Action(
+                () =>
+                    proxy.AddTransformer<double>(c => c.AlsoATest(A<int>.PlaceHolder, A<double>.PlaceHolder),
+                        Direction.In, d => d + 12.4)).ShouldThrow<InvalidOperationException>(
+                            "Must contain exactly one `A<T>.Selected` parameter value");
+        }
+
+        [Fact]
+        public void ShouldThrowAnExceptionWhenAInterceptorIsAddedToSomethingWeird()
+        {
+            //Given, When
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+
+            //Then
+            new Action(() => proxy.AddInterceptor(c => 5, func => 5)).ShouldThrow<ArgumentException>(
+                "Can only add interceptors for Properties or Functions");
+
+            new Action(() => proxy.AddInterceptor(c => new Action<Callee>(obj => obj.DoNothing())(c), func => func()))
+                .ShouldThrow<ArgumentException>(
+                    "Can only add interceptors for Properties or Functions");
+        }
+
 
         [Fact]
         public void ShouldBeAbleToTransformTheInputOfAProperty()

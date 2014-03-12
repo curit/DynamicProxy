@@ -22,12 +22,12 @@ namespace DynamicProxy
         /// <param name="function">An expression pointing to a function</param>
         /// <param name="interceptor">The delegate containing the interceptor.</param>
         /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
-        IProxy<T> AddInterceptor<<#= parameters #>, TResult>(Expression<Action<T>> function, Func<Func<<#= parameters #>, TResult>, <#= parameters #>, TResult> interceptor);
+        IProxy<T> AddInterceptor<<#= parameters #>, TResult>(Expression<Action<T, <#= parameters #>>> function, Func<Func<<#= parameters #>, TResult>, <#= parameters #>, TResult> interceptor);
 	
 <#}#>
 
 <# 
-    for(int parametersCount = 1; parametersCount <= maxParameterCount; parametersCount++) { 
+    for(int parametersCount = 2; parametersCount <= maxParameterCount; parametersCount++) { 
 	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));#>
 	    /// <summary>
         /// Add interceptor to a void function with <#= parametersCount #> parameters;
@@ -35,7 +35,7 @@ namespace DynamicProxy
         /// <param name="function">An expression pointing to a function</param>
         /// <param name="interceptor">The delegate containing the interceptor.</param>
         /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
-        IProxy<T> AddInterceptor<<#= parameters #>>(Expression<Action<T>> function, Action<Action<<#= parameters #>>, <#= parameters #>> interceptor);
+        IProxy<T> AddInterceptor<<#= parameters #>>(Expression<Action<T, <#= parameters #>>> function, Action<Action<<#= parameters #>>, <#= parameters #>> interceptor);
 
 <#}#>
 }
@@ -47,15 +47,9 @@ namespace DynamicProxy
 	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));
 	   string args = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "arg" + i));
 	   string calleeArgs = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "(T" + i +")args[" + (i - 1) + "]"));#>
-	public IProxy<T> AddInterceptor<<#= parameters #>, TResult>(Expression<Action<T>> function, Func<Func<<#= parameters #>, TResult>, <#= parameters #>, TResult> interceptor)
+	public IProxy<T> AddInterceptor<<#= parameters #>, TResult>(Expression<Action<T, <#= parameters #>>> function, Func<Func<<#= parameters #>, TResult>, <#= parameters #>, TResult> interceptor)
 		{
-			return AddFunctionInterceptor(function,
-                (del, args) =>
-                    interceptor((<#= args #>)
-                        => (TResult) del(new object[]
-                        {
-                            <#= args #>
-                        }), <#= calleeArgs #>));
+			return AddFunctionInterceptor(function, (del, args) => interceptor((<#= args #>) => (TResult) del(new object[] { <#= args #> }), <#= calleeArgs #>));
 		}
 
 	<#}
@@ -64,15 +58,11 @@ namespace DynamicProxy
 	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));
 	   string args = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "arg" + i));
 	   string calleeArgs = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "(T" + i +")args[" + (i - 1) + "]"));#>	
-        public IProxy<T> AddInterceptor<<#= parameters #>>(Expression<Action<T>> function, Action<Action<<#= parameters #>>, <#= parameters #>> interceptor)
+        public IProxy<T> AddInterceptor<<#= parameters #>>(Expression<Action<T, <#= parameters #>>> function, Action<Action<<#= parameters #>>, <#= parameters #>> interceptor)
 		{
-			return AddFunctionInterceptor(function, (del, args) =>
-            {
-                interceptor(
-                    (<#= args #>) =>
-                        del(new object[]
-                        {<#= args #>}),
-                    <#= calleeArgs #>);
+			return AddFunctionInterceptor(function, (del, args) => 
+			{
+                interceptor((<#= args #>) => del(new object[] { <#= args #> }), <#= calleeArgs #>);
                 return null;
             });
 		}

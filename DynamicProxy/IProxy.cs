@@ -61,7 +61,7 @@
         /// <summary>
         /// Add Interceptor to PropertyGet
         /// </summary>
-        /// <typeparam name="TProp">Type of the function</typeparam>
+        /// <typeparam name="TProp">Type of the property</typeparam>
         /// <param name="property">Expression pointing to the function</param>
         /// <param name="interceptor">The Interceptor delegate</param>
         /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
@@ -70,7 +70,7 @@
         /// <summary>
         /// Add Interceptor to PropertySet
         /// </summary>
-        /// <typeparam name="TProp">Type of the function</typeparam>
+        /// <typeparam name="TProp">Type of the property</typeparam>
         /// <param name="property">Expression pointing to the function</param>
         /// <param name="interceptor">The Interceptor delegate</param>
         /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>

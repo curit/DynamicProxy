@@ -226,7 +226,11 @@ namespace DynamicProxy
                     case MemberTypes.Method:
                     {
                         var methodCall = fucntionOrProperty.GetTargetMethodCall();
-                        var arg = methodCall.Arguments.Select((a, i) => Tuple.Create(i, (MemberExpression) a)).First(t => t.Item2.Member.Name == "Selected");
+                        var arg = methodCall.Arguments.Select((a, i) => Tuple.Create(i, (MemberExpression) a)).SingleOrDefault(t => t.Item2.Member.Name == "Selected");
+                        if (arg == null)
+                        {
+                            throw new InvalidOperationException("Must contain exactly one `A<T>.Selected` parameter value");
+                        }
                         _inTransformers.Add(functionOrPropertyName, Tuple.Create(arg.Item1, (Delegate)transformer));
                     }
                     break;
@@ -253,15 +257,67 @@ namespace DynamicProxy
         {
             return AddTransformer<T2, T2>(function, direction, transformer);
         }
-        
+
         public IProxy<T> AddInterceptor<TResult>(Expression<Func<T, TResult>> property, Func<Func<TResult>, TResult> interceptor)
         {
-            return AddPropertyInterceptor(property, (del, args) => interceptor(() => (TResult)del.FastDynamicInvoke()), Direction.Out);
+            var memberType = property.GetTargetMemberInfo();
+            if (memberType == null)
+            {
+                throw new ArgumentException("Can only add interceptors for Properties or Functions");
+            }
+
+            switch (memberType.MemberType)
+            {
+                case MemberTypes.Constructor:
+                case MemberTypes.Event:
+                case MemberTypes.Field:
+                case MemberTypes.TypeInfo:
+                case MemberTypes.Custom:
+                case MemberTypes.NestedType:
+                    throw new ArgumentException("Can only add interceptors for Properties or Functions");
+                    
+                case MemberTypes.Method:
+                    return AddFunctionInterceptor(property, (del, args) => interceptor(() => (TResult) del(new object[] {})));
+                case MemberTypes.Property:
+                    return AddPropertyInterceptor(property, (del, args) => interceptor(() => (TResult) del(new object[] { })), Direction.Out);
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
-        public IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Action<Action<TProp>, TProp> func)
+        public IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Action<Action<TProp>, TProp> interceptor)
         {
-            return AddPropertyInterceptor(property, (del, args) => { func(a => del(new object[] { a }), (TProp)args[0]); return null; }, Direction.In);
+            var memberType = property.GetTargetMemberInfo();
+            if (memberType == null)
+            {
+                throw new ArgumentException("Can only add interceptors for Properties or Functions");
+            }
+
+            switch (memberType.MemberType)
+            {
+                case MemberTypes.Constructor:
+                case MemberTypes.Event:
+                case MemberTypes.Field:
+                case MemberTypes.TypeInfo:
+                case MemberTypes.Custom:
+                case MemberTypes.NestedType:
+                    throw new ArgumentException("Can only add interceptors for Properties or Functions");
+
+                case MemberTypes.Method:
+                    return AddFunctionInterceptor(property, (del, args) =>
+                    {
+                        interceptor(a => del(new object[] {a}), (TProp) args[0]);
+                        return null;
+                    });
+                case MemberTypes.Property:
+                    return AddPropertyInterceptor(property, (del, args) =>
+                    {
+                        interceptor(a => del(new object[] {a}), (TProp) args[0]);
+                        return null;
+                    }, Direction.In);
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
         }
 
         public IProxy<T> AddInterceptor(Expression<Action<T>> function, Action<Action> interceptor)
@@ -275,13 +331,18 @@ namespace DynamicProxy
         /// <param name="function"></param>
         /// <param name="func"></param>
         /// <returns></returns>
-        private IProxy<T> AddFunctionInterceptor(Expression<Action<T>> function, Func<Func<object[], object>, object[], object> func)
+        private IProxy<T> AddFunctionInterceptor(Expression function, Func<Func<object[], object>, object[], object> func)
         {
             var memberInfo = function.GetTargetMemberInfo();
-            var functionOrPropertyName = memberInfo.Name;
-            var hasGenericTypeArguments = (memberInfo.MemberType == MemberTypes.Method) && ((MethodInfo)memberInfo).IsGenericMethod;
+            if (memberInfo == null)
+            {
+                throw new ArgumentException("Can only add interceptors for Properties or Functions");
+            }
             
-            _interceptors.Add(Tuple.Create(functionOrPropertyName, hasGenericTypeArguments), new Func<Delegate, object[], object> ((del, args) => func(arg => del.FastDynamicInvoke(new object[] { arg }), args)));
+            var methodInfo = memberInfo as MethodInfo;
+            var functionOrPropertyName = methodInfo.Name;
+            var hasGenericTypeArguments = methodInfo.IsGenericMethod;
+            _interceptors.Add(Tuple.Create(functionOrPropertyName, hasGenericTypeArguments),new Func<Delegate, object[], object>((del, args) => func(arg => del.FastDynamicInvoke(new object[] {arg}), args)));
             return this;
         }
 
@@ -292,11 +353,11 @@ namespace DynamicProxy
         /// <param name="func"></param>
         /// <param name="direction"></param>
         /// <returns></returns>
-        private IProxy<T> AddPropertyInterceptor(Expression property, Func<Func<object[], object>, object[], object> func, Direction direction)
+        private IProxy<T> AddPropertyInterceptor<TResult>(Expression<Func<T,TResult>>  property, Func<Func<object[], object>, object[], object> func, Direction direction)
         {
             var memberInfo = property.GetTargetMemberInfo();
-            var propertyName = memberInfo.Name;
-         
+            var propertyInfo = memberInfo as PropertyInfo;
+            var propertyName = propertyInfo.Name;
             _propertyInterceptors.Add(Tuple.Create(propertyName, direction), new Func<Delegate, object[], object>((del, args) => func(arg => del.FastDynamicInvoke(new object[] { arg }), args)));
             return this;
         }
