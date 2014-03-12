@@ -114,7 +114,8 @@ namespace DynamicProxy
             if (interceptor != null)
             {
                 Func<object, object> meth = property.GetValue;
-                partialResult = interceptor.FastDynamicInvoke(new object[] { meth, new object [] {} });
+                var curriedMethod = new Func<object[], object>(args => meth(_wrappedObject));
+                partialResult = interceptor.FastDynamicInvoke(new object[] { curriedMethod, new object[] {} });
             }
             else
             {
@@ -258,7 +259,12 @@ namespace DynamicProxy
             return AddTransformer<T2, T2>(function, direction, transformer);
         }
 
-        public IProxy<T> AddInterceptor<TResult>(Expression<Func<T, TResult>> property, Func<Func<TResult>, TResult> interceptor)
+        public IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Func<Func<TProp>, TProp> interceptor)
+        {
+            return AddInterceptor<TProp, TProp>(property, interceptor);
+        }
+
+        public IProxy<T> AddInterceptor<TOriginal, TNew>(Expression<Func<T, TOriginal>> property, Func<Func<TOriginal>, TNew> interceptor)
         {
             var memberType = property.GetTargetMemberInfo();
             if (memberType == null)
@@ -275,11 +281,11 @@ namespace DynamicProxy
                 case MemberTypes.Custom:
                 case MemberTypes.NestedType:
                     throw new ArgumentException("Can only add interceptors for Properties or Functions");
-                    
+
                 case MemberTypes.Method:
-                    return AddFunctionInterceptor(property, (del, args) => interceptor(() => (TResult) del(new object[] {})));
+                    return AddFunctionInterceptor(property, (del, args) => interceptor(() => (TOriginal)del(new object[] { })));
                 case MemberTypes.Property:
-                    return AddPropertyInterceptor(property, (del, args) => interceptor(() => (TResult) del(new object[] { })), Direction.Out);
+                    return AddPropertyInterceptor(property, (del, args) => interceptor(() => (TOriginal)del(new object[] { })), Direction.Out);
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -287,42 +293,26 @@ namespace DynamicProxy
 
         public IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Action<Action<TProp>, TProp> interceptor)
         {
+            return AddInterceptor<TProp, TProp>(property, interceptor);
+        }
+
+        public IProxy<T> AddInterceptor<TOriginal, TNew>(Expression<Func<T, TOriginal>> property, Action<Action<TOriginal>, TNew> interceptor)
+        {
             var memberType = property.GetTargetMemberInfo();
             if (memberType == null)
             {
                 throw new ArgumentException("Can only add interceptors for Properties or Functions");
             }
-
-            switch (memberType.MemberType)
+            return AddPropertyInterceptor(property, (del, args) =>
             {
-                case MemberTypes.Constructor:
-                case MemberTypes.Event:
-                case MemberTypes.Field:
-                case MemberTypes.TypeInfo:
-                case MemberTypes.Custom:
-                case MemberTypes.NestedType:
-                    throw new ArgumentException("Can only add interceptors for Properties or Functions");
-
-                case MemberTypes.Method:
-                    return AddFunctionInterceptor(property, (del, args) =>
-                    {
-                        interceptor(a => del(new object[] {a}), (TProp) args[0]);
-                        return null;
-                    });
-                case MemberTypes.Property:
-                    return AddPropertyInterceptor(property, (del, args) =>
-                    {
-                        interceptor(a => del(new object[] {a}), (TProp) args[0]);
-                        return null;
-                    }, Direction.In);
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
+                interceptor(a => del(new object[] { a }), (TNew)args[0]);
+                return null;
+            }, Direction.In);
         }
 
         public IProxy<T> AddInterceptor(Expression<Action<T>> function, Action<Action> interceptor)
         {
-            return AddFunctionInterceptor(function, (del, args) =>  { interceptor(() => del(args)); return null; });
+            return AddFunctionInterceptor(function, (del, args) =>  { interceptor(() => del(new object[] {})); return null; });
         }
 
         /// <summary>

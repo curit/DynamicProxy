@@ -59,13 +59,23 @@
         IProxy<T> AddInterceptor(Expression<Action<T>> function, Action<Action> interceptor);
 
         /// <summary>
-        /// Add Interceptor to PropertyGet
+        /// Add Interceptor to PropertyGet that doesn't change the type
         /// </summary>
         /// <typeparam name="TProp">Type of the property</typeparam>
         /// <param name="property">Expression pointing to the function</param>
         /// <param name="interceptor">The Interceptor delegate</param>
         /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
         IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Func<Func<TProp>, TProp> interceptor);
+
+        /// <summary>
+        /// Add Interceptor to PropertyGet
+        /// </summary>
+        /// <typeparam name="TOriginal">Type of the property</typeparam>
+        /// <typeparam name="TNew">The new type of the property</typeparam>
+        /// <param name="property">Expression pointing to the function</param>
+        /// <param name="interceptor">The Interceptor delegate</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddInterceptor<TOriginal, TNew>(Expression<Func<T, TOriginal>> property, Func<Func<TOriginal>, TNew> interceptor);
 
         /// <summary>
         /// Add Interceptor to PropertySet
@@ -75,6 +85,16 @@
         /// <param name="interceptor">The Interceptor delegate</param>
         /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
         IProxy<T> AddInterceptor<TProp>(Expression<Func<T, TProp>> property, Action<Action<TProp>, TProp> interceptor);
+
+        /// <summary>
+        /// Add Interceptor to PropertySet
+        /// </summary>
+        /// <typeparam name="TOriginal">Type of the property</typeparam>
+        /// <typeparam name="TNew">The new type of the property</typeparam>
+        /// <param name="property">Expression pointing to the function</param>
+        /// <param name="interceptor">The Interceptor delegate</param>
+        /// <returns>The IProxy so you can chain adding Transformers and Interceptors.</returns>
+        IProxy<T> AddInterceptor<TOriginal, TNew>(Expression<Func<T, TOriginal>> property, Action<Action<TOriginal>, TNew> interceptor);
 
         //IProxy<T> AddFunctionInterceptor(Expression<Action<T>> function, Func<Func<object[], object>, object[], object> func);
         //IProxy<T> AddPropertyInterceptor(Expression property, Func<Func<object[], object>, object[], object> func, Direction direction);

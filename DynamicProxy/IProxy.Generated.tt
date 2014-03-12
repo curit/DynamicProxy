@@ -4,7 +4,7 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Collections.Generic" #>
 <#@ output extension=".cs" #>
-<#  const int maxParameterCount = 15; #>
+<#  const int maxParameterCount = 5; #>
 namespace DynamicProxy
 {
 	using System;
@@ -27,7 +27,7 @@ namespace DynamicProxy
 <#}#>
 
 <# 
-    for(int parametersCount = 2; parametersCount <= maxParameterCount; parametersCount++) { 
+    for(int parametersCount = 1; parametersCount <= maxParameterCount; parametersCount++) { 
 	   string parameters = String.Join(", ", Enumerable.Range(1, parametersCount).Select(i => "T" + i));#>
 	    /// <summary>
         /// Add interceptor to a void function with <#= parametersCount #> parameters;

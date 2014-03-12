@@ -1,6 +1,10 @@
 ﻿namespace DynamicProxy.Tests
 {
     using System;
+    using System.Diagnostics;
+    using System.Linq.Expressions;
+    using FakeItEasy;
+    using FakeItEasy.ExtensionSyntax.Full;
     using Xunit;
     using XunitShould;
 
@@ -13,10 +17,23 @@
         string AlsoATest(int i, double d);
         T Test<T>(T input);
         int I { get; set; }
+        double D { get; set; }
+        void SetFunction(int i);
+        string GetFunction();
     }
 
     public class Callee
     {
+        public virtual void SetFunction(int i)
+        {
+            Debug.Print("SetFunc: " + i);
+        }
+
+        public virtual int GetFunction()
+        {
+            return 5;
+        }
+
         public virtual int Test(int i)
         {
             return i + 1;
@@ -32,7 +49,7 @@
             throw new Exception("Blergh!");
         }
 
-        public void DoNothing()
+        public virtual void DoNothing()
         {
         }
 
@@ -51,6 +68,7 @@
         }
 
         public int I { get; set; }
+        public virtual int D { get; set; }
     }
 
     public class ProxyFixture
@@ -118,7 +136,7 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddTransformer(c => c.Banaan(A<int>.PlaceHolder), Direction.Out, i => i.ToString());
+            proxy.AddTransformer(c => c.Banaan(DynamicProxy.A<int>.PlaceHolder), Direction.Out, i => i.ToString());
 
             //When
             var d = proxiedCallee.Banaan(5);
@@ -134,8 +152,8 @@
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
 
-            proxy.AddTransformer<double>(c => c.Test(A<double>.PlaceHolder), Direction.Out, a => a + 2)
-                 .AddTransformer<int>(c => c.Test(A<int>.PlaceHolder), Direction.Out, i => i + 1);
+            proxy.AddTransformer<double>(c => c.Test(DynamicProxy.A<double>.PlaceHolder), Direction.Out, a => a + 2)
+                 .AddTransformer<int>(c => c.Test(DynamicProxy.A<int>.PlaceHolder), Direction.Out, i => i + 1);
             
             //When
             var d = proxiedCallee.Test(5.0);
@@ -151,8 +169,8 @@
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
 
-            proxy.AddTransformer<double>(c => c.Test(A<double>.PlaceHolder), Direction.Out, a => a + 2)
-                 .AddTransformer<int>(c => c.Test(A<int>.PlaceHolder), Direction.Out, i => i + 1);
+            proxy.AddTransformer<double>(c => c.Test(DynamicProxy.A<double>.PlaceHolder), Direction.Out, a => a + 2)
+                 .AddTransformer<int>(c => c.Test(DynamicProxy.A<int>.PlaceHolder), Direction.Out, i => i + 1);
 
             //When
             var d = proxiedCallee.Test(5.0);
@@ -240,7 +258,7 @@
             //Given
             var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
             var proxy = proxiedCallee as IProxy<Callee>;
-            proxy.AddTransformer<double>(c => c.AlsoATest(A<int>.PlaceHolder, A<double>.Selected), Direction.In, d => d + 12.4);
+            proxy.AddTransformer<double>(c => c.AlsoATest(DynamicProxy.A<int>.PlaceHolder, DynamicProxy.A<double>.Selected), Direction.In, d => d + 12.4);
 
             //When
             var result = proxiedCallee.AlsoATest(4, 4.0);
@@ -260,7 +278,7 @@
             //Then
             new Action(
                 () =>
-                    proxy.AddTransformer<double>(c => c.AlsoATest(A<int>.PlaceHolder, A<double>.PlaceHolder),
+                    proxy.AddTransformer<double>(c => c.AlsoATest(DynamicProxy.A<int>.PlaceHolder, DynamicProxy.A<double>.PlaceHolder),
                         Direction.In, d => d + 12.4)).ShouldThrow<InvalidOperationException>(
                             "Must contain exactly one `A<T>.Selected` parameter value");
         }
@@ -273,7 +291,7 @@
             var proxy = proxiedCallee as IProxy<Callee>;
 
             //Then
-            new Action(() => proxy.AddInterceptor(c => 5, func => 5)).ShouldThrow<ArgumentException>(
+            new Action(() => proxy.AddInterceptor<int>(c => 5, func => 5)).ShouldThrow<ArgumentException>(
                 "Can only add interceptors for Properties or Functions");
 
             new Action(() => proxy.AddInterceptor(c => new Action<Callee>(obj => obj.DoNothing())(c), func => func()))
@@ -320,7 +338,7 @@
             var proxy = proxiedCallee as IProxy<Callee>;
 
             //When
-            proxy.AddInterceptor(c => c.I, func => 7);
+            proxy.AddInterceptor<int>(c => c.I, func => 7);
 
             //Then
             proxiedCallee.I.ShouldEqual(7);
@@ -341,5 +359,73 @@
             proxiedCallee.I.ShouldEqual(7);
         }
 
+        [Fact]
+        public void ShouldBeAbleToProxyFunctionsThatLookLikePropertyFunctionsAndPureSideEffectFunctions()
+        {
+            //Given
+            var aFakedCallee = A.Fake<Callee>();
+            A.CallTo(() => aFakedCallee.GetFunction()).Returns(5);
+
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(aFakedCallee);
+            var proxy = proxiedCallee as IProxy<Callee>;
+
+            proxy.AddInterceptor<int>((c,i) => c.SetFunction(i), (func, i) => func(i + 1));
+            proxy.AddInterceptor(c => c.GetFunction(), f => (f() + 1).ToString());
+
+            //When
+            proxiedCallee.SetFunction(6);
+
+            //Then
+            A.CallTo(() => aFakedCallee.SetFunction(A<int>.That.Matches(i => i == 7))).MustHaveHappened(Repeated.Exactly.Once);
+            proxiedCallee.GetFunction().ShouldEqual("6");
+        }
+
+        [Fact]
+        public void ShouldBeAbleToProxyAVoidVoidFunctionAndRedirectItToNowhere()
+        {
+            //Given
+            var aFakedCallee = A.Fake<Callee>();
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(aFakedCallee);
+            var proxy = proxiedCallee as IProxy<Callee>;
+            
+            //When
+            proxy.AddInterceptor(c => c.DoNothing(), func => { });
+            proxiedCallee.DoNothing();
+
+            //Then
+            A.CallTo(() => aFakedCallee.DoNothing()).MustHaveHappened(Repeated.Never);
+        }
+
+        [Fact]
+        public void ShouldBeAbleToProxyAVoidVoidFunction()
+        {
+            //Given
+            var aFakedCallee = A.Fake<Callee>();
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(aFakedCallee);
+            var proxy = proxiedCallee as IProxy<Callee>;
+
+            //When
+            proxy.AddInterceptor(c => c.DoNothing(), func => func());
+            proxiedCallee.DoNothing();
+
+            //Then
+            A.CallTo(() => aFakedCallee.DoNothing()).MustHaveHappened(Repeated.Exactly.Once);
+        }
+
+        [Fact]
+        public void ShouldBeAbleToChangeTheTypeOfAPropertyWithAnInterceptor()
+        {
+            //Given
+            var proxiedCallee = ProxyFactory<Callee>.Proxy<ICallee>(new Callee());
+            var proxy = proxiedCallee as IProxy<Callee>;
+            
+            //When
+            proxy.AddInterceptor(c => c.D, func => Convert.ToDouble(func()));
+            proxy.AddInterceptor<int, double>(c => c.D, (action, d) => action(Convert.ToInt32(d)));
+
+            //Then
+            proxiedCallee.D = 5.0;
+            proxiedCallee.D.ShouldEqual(5.0);
+        }
     }
 }
