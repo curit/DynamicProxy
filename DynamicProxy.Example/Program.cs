@@ -5,11 +5,11 @@
     public interface IBook
     {
         int NumberOfPages { get; set; }
-        int CurrentPage { get; }
+        int CurrentPage { get; set;  }
         void NextPage();
     }
 
-    public class Book
+    public sealed class Book
     {
         public int NumberOfPages { get; set; }
         public int CurrentPage { get; private set; }
@@ -38,12 +38,34 @@
 
             var proxiedBook = ProxyFactory<Book>.Proxy<IBook>(book);
             var proxy = proxiedBook as IProxy<Book>;
+            //make the setter available;
+            proxiedBook.CurrentPage = 5;
 
             //we don't have about the first 5 pages they're bullshit or emtpy.
             proxy.AddTransformer(c => c.NumberOfPages, Direction.Out, f => f - 5);
+            proxy.AddTransformer(c => c.CurrentPage, Direction.Out, i => i - 5);
             
+            //we don't want to see that exception. And we want it to return the currentpage
+            proxy.AddInterceptor(c => c.NextPage(), action =>
+            {
+                try
+                {
+                    action();
+                }
+                catch (EndOfBookException)
+                {
+                }
+            });
+
             Console.Out.WriteLine("Number of pages: " + proxiedBook.NumberOfPages);
-            
+            Console.Out.WriteLine("Current page: " + proxiedBook.CurrentPage);
+              
+            while (proxiedBook.CurrentPage <= proxiedBook.NumberOfPages)
+            {
+                proxiedBook.NextPage();
+                Console.Out.Write(proxiedBook.CurrentPage + ", ");
+            }
+
             Console.In.ReadLine();
         }
     }
