@@ -59,6 +59,7 @@
             //we don't have about the first 5 pages they're bullshit or emtpy.
             proxy.AddTransformer(c => c.NumberOfPages, Direction.Out, f => f - 5);
             proxy.AddTransformer(c => c.CurrentPage, Direction.Out, i => i - 5);
+            //proxy.AddTransformer(c => c.CurrentPage, Direction.In, i => i - 5);
             
             //we don't want to see that exception. And we want it to return the currentpage
             proxy.AddInterceptor(c => c.NextPage(), action =>
@@ -74,6 +75,8 @@
 
             //we want to include an extra page in the chapter 
             proxy.AddTransformer<int>(c => c.AddChapter(A<string>.PlaceHolder, A<int>.Selected, A<int>.PlaceHolder), Direction.In, i => i - 1);
+
+            //proxy.AddTransformer<int[]>(c => c.AddChapter(A<string>.PlaceHolder, A<int>.PlaceHolder, A<int>.PlaceHolder), Direction.Out, i => i.Reverse().ToArray());
 
             //we want to intercept it because we can!
             proxy.AddInterceptor<string, int, int, int[]>((b, name, start, end) => b.AddChapter(name, start, end),
