@@ -66,7 +66,7 @@ This proxiedBook also implements the interface `IProxy<Book>` which contains the
 IProxy<Book> proxy = proxiedBook as IProxy<Book>;
 ```
 
-###Input or paramter Transformers
+###Input or parameter Transformers
 
 You can change the value or the type of a paramter.
 
