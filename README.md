@@ -71,7 +71,10 @@ IProxy<Book> proxy = proxiedBook as IProxy<Book>;
 You can change the value or the type of a paramter.
 
 ```c#
-proxy.AddTransformer<int>(c => c.AddChapter(A<string>.PlaceHolder, A<int>.Selected, A<int>.PlaceHolder), Direction.In, i => i - 1);
+proxy.AddTransformer<int>(
+    c => c.AddChapter(A<string>.PlaceHolder, A<int>.Selected, A<int>.PlaceHolder), //selector
+    Direction.In, 								   //direction
+    i => i - 1);								   //editor
 ```
 
 Or for a property:
@@ -86,13 +89,14 @@ The other way round:
 
 for properties
 ```c#
-proxy.AddTransformer(c => c.CurrentPage, Direction.In, i => i - 5);
+proxy.AddTransformer(c => c.CurrentPage, Direction.Out, i => i - 5);
 ```
 
 for functions:
 ```c#
 proxy.AddTransformer<int[]>(
-    c => c.AddChapter(A<string>.PlaceHolder, A<int>.PlaceHolder, A<int>.PlaceHolder), Direction.Out,
+    c => c.AddChapter(A<string>.PlaceHolder, A<int>.PlaceHolder, A<int>.PlaceHolder), 
+    Direction.Out,
     i => i.Reverse().ToArray());
 ```
 
