@@ -1,8 +1,8 @@
-#DynamicProxy
+# DynamicProxy
 
 A fast (hopefully), simple, transparant. easy to understand object proxy based on the DLR And Impromptu-Interface.
 
-##So what does it do?
+## So what does it do?
 
 It lets you modify functions and properties in three ways.
 
@@ -66,7 +66,7 @@ This proxiedBook also implements the interface `IProxy<Book>` which contains the
 IProxy<Book> proxy = proxiedBook as IProxy<Book>;
 ```
 
-###Input or parameter Transformers
+### Input or parameter Transformers
 
 You can change the value or the type of a paramter.
 
@@ -83,7 +83,7 @@ Or for a property:
 proxy.AddTransformer(c => c.CurrentPage, Direction.In, i => i - 5);
 ```
 
-###Returnvalue Transformers
+### Returnvalue Transformers
 
 The other way round:
 
@@ -100,7 +100,7 @@ proxy.AddTransformer<int[]>(
     i => i.Reverse().ToArray());
 ```
 
-###Interceptors
+### Interceptors
 
 You can intercept function calls like this:
 ```c#
