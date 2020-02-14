@@ -6,7 +6,7 @@ A fast (hopefully), simple, transparant. easy to understand object proxy based o
 
 It lets you modify functions and properties in three ways.
 
-But before we discus these three things we need to build the proxy.
+But before we discuss these three things we need to build the proxy.
 
 And that goes something like this:
 
